@@ -1,8 +1,10 @@
 package config
 
 import (
+	"crypto/md5"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -90,6 +92,9 @@ type terragruntRemoteState struct {
 // Map with cached evaluated locals to avoid re-evaluation
 var localsCache = make(map[string]cty.Value)
 
+// Mutex for single access to locals cache map
+var localsCacheMutex = &sync.Mutex{}
+
 // DecodeBaseBlocks takes in a parsed HCL2 file and decodes the base blocks. Base blocks are blocks that should always
 // be decoded even in partial decoding, because they provide bindings that are necessary for parsing any block in the
 // file. Currently base blocks are:
@@ -118,7 +123,8 @@ func DecodeBaseBlocks(
 		return nil, nil, TrackInclude{}, err
 	}
 
-	cacheKey := fmt.Sprintf("%v-%v", filename, trackInclude)
+	md5Sum := md5.Sum(hclFile.Bytes)
+	cacheKey := fmt.Sprintf("%v-%v-%v", md5Sum, filename, trackInclude)
 	terragruntOptions.Logger.Info("Test: Generated cache key: ", cacheKey)
 	cachedLocalsAsCty, foundInCache := localsCache[cacheKey]
 	if foundInCache {
@@ -144,7 +150,9 @@ func DecodeBaseBlocks(
 
 	terragruntOptions.Logger.Info("Test: Saving in cache: ", localsAsCty)
 
+	localsCacheMutex.Lock()
 	localsCache[cacheKey] = localsAsCty
+	localsCacheMutex.Unlock()
 	return &localsAsCty, terragruntInclude, trackInclude, nil
 }
 
