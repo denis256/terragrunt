@@ -119,7 +119,7 @@ func DecodeBaseBlocks(
 	}
 
 	cacheKey := fmt.Sprintf("%v-%v", filename, trackInclude)
-	terragruntOptions.Logger.Error("Test: Generated cache key: ", cacheKey)
+	terragruntOptions.Logger.Info("Test: Generated cache key: ", cacheKey)
 	cachedLocalsAsCty, foundInCache := localsCache[cacheKey]
 	if foundInCache {
 		return &cachedLocalsAsCty, terragruntInclude, trackInclude, nil
@@ -142,7 +142,7 @@ func DecodeBaseBlocks(
 		return nil, nil, trackInclude, err
 	}
 
-	terragruntOptions.Logger.Error("Test: Saving in cache: ", localsAsCty)
+	terragruntOptions.Logger.Info("Test: Saving in cache: ", localsAsCty)
 
 	localsCache[cacheKey] = localsAsCty
 	return &localsAsCty, terragruntInclude, trackInclude, nil
