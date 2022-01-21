@@ -38,3 +38,36 @@ func (cache *StringCache) Put(key string, value string) {
 	cacheKey := fmt.Sprintf("%x", md5Sum)
 	cache.Cache[cacheKey] = value
 }
+
+// TerragruntConfigCache - structure to store cached values
+type TerragruntConfigCache struct {
+	Cache map[string]*TerragruntConfig
+	Mutex *sync.Mutex
+}
+
+// NewTerragruntConfigCache - create new string cache
+func NewTerragruntConfigCache() *TerragruntConfigCache {
+	return &TerragruntConfigCache{
+		Cache: map[string]*TerragruntConfig{},
+		Mutex: &sync.Mutex{},
+	}
+}
+
+// Get - get cached value, md5 hash is used as key to have fixed length keys and avoid duplicates
+func (cache *TerragruntConfigCache) Get(key string) (*TerragruntConfig, bool) {
+	cache.Mutex.Lock()
+	defer cache.Mutex.Unlock()
+	md5Sum := md5.Sum([]byte(key))
+	cacheKey := fmt.Sprintf("%x", md5Sum)
+	value, found := cache.Cache[cacheKey]
+	return value, found
+}
+
+// Put - put value in cache, md5 hash is used as key to have fixed length keys and avoid duplicates
+func (cache *TerragruntConfigCache) Put(key string, value *TerragruntConfig) {
+	cache.Mutex.Lock()
+	defer cache.Mutex.Unlock()
+	md5Sum := md5.Sum([]byte(key))
+	cacheKey := fmt.Sprintf("%x", md5Sum)
+	cache.Cache[cacheKey] = value
+}
