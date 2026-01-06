@@ -4,32 +4,8 @@ on:
   workflow_call:
 
 jobs:
-  detect_release:
-    name: Detect if this is a release build
-    runs-on: ubuntu-latest
-    outputs:
-      is_release: ${{ steps.check.outputs.is_release }}
-    steps:
-      - name: Check if release tag
-        id: check
-        run: |
-          REF="${GITHUB_REF}"
-          echo "Git ref: $REF"
-
-          # Check if this is a release tag (v*, alpha*, beta*)
-          if [[ "$REF" =~ ^refs/tags/v.* ]] || \
-             [[ "$REF" =~ ^refs/tags/alpha.* ]] || \
-             [[ "$REF" =~ ^refs/tags/beta.* ]]; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-            echo "This is a RELEASE build - signing will be enabled"
-          else
-            echo "is_release=false" >> "$GITHUB_OUTPUT"
-            echo "This is NOT a release build - signing will be skipped"
-          fi
-
   build:
     name: Build (${{ matrix.os }}/${{ matrix.arch }})
-    needs: detect_release
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -102,98 +78,26 @@ jobs:
           name: terragrunt_${{ matrix.os }}_${{ matrix.arch }}
           path: bin/terragrunt_${{ matrix.os }}_${{ matrix.arch }}*
 
-  sign_macos:
-    name: Sign MacOS Binaries
-    if: ${{ needs.detect_release.outputs.is_release == 'true' }}
-    needs: [detect_release, build]
-    uses: ./.github/workflows/sign-macos.yml
-    secrets: inherit
-
-  sign_windows:
-    name: Sign Windows Binaries
-    if: ${{ needs.detect_release.outputs.is_release == 'true' }}
-    needs: [detect_release, build]
-    uses: ./.github/workflows/sign-windows.yml
-    secrets: inherit
-
-  merge_signed_binaries:
-    name: Merge All Signed Binaries
-    if: ${{ needs.detect_release.outputs.is_release == 'true' }}
-    needs: [detect_release, sign_macos, sign_windows]
+  merge_binaries:
+    name: Merge All Binaries
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Download macOS signed binaries
+      - name: Download all build artifacts
         uses: actions/download-artifact@v7
         with:
-          name: macos-signed-files
-          path: bin/
-
-      - name: Verify macOS binaries after download
-        run: |
-          # Get list of expected macOS binaries from config
-          macos_binaries=$(jq -r '.platforms[] | select(.os == "darwin") | .binary' .github/assets/release-assets-config.json)
-
-          echo "Expected macOS binaries from config:"
-          echo "$macos_binaries"
-          echo ""
-
-          echo "Listing expected files in bin/:"
-          for binary in $macos_binaries; do
-            if [[ -f "bin/$binary" ]]; then
-              ls -lh "bin/$binary"
-            fi
-            if [[ -f "bin/$binary.zip" ]]; then
-              ls -lh "bin/$binary.zip"
-            fi
-          done
-          echo ""
-
-          echo "Verifying macOS binaries:"
-          for binary in $macos_binaries; do
-            echo "Checking bin/$binary:"
-
-            [[ -f "bin/$binary" ]] || {
-              echo "  ERROR: Binary bin/$binary is missing from downloaded artifact"
-              exit 1
-            }
-
-            echo "  OK: bin/$binary"
-            file "bin/$binary"
-
-            # Check for ZIP file
-            if [[ -f "bin/$binary.zip" ]]; then
-              echo "  OK: bin/$binary.zip"
-              ls -lh "bin/$binary.zip"
-            else
-              echo "  NOTICE: bin/$binary.zip (not present, will be created in merge)"
-            fi
-            echo ""
-          done
-
-      - name: Download Windows signed binaries
-        uses: actions/download-artifact@v7
-        with:
-          name: windows-signed-files
-          path: bin/
-
-      - name: Download Linux binaries (unsigned)
-        uses: actions/download-artifact@v7
-        with:
-          pattern: terragrunt_linux_*
+          pattern: terragrunt_*
           path: bin/
           merge-multiple: true
 
       - name: List all binaries
         run: |
           echo "All binaries ready for release:"
-          ls -lahrt bin/*
+          ls -lahrt bin/
 
-      - name: Upload All Signed Binaries
+      - name: Upload All Binaries
         uses: actions/upload-artifact@v6
         with:
-          name: all-signed-binaries
+          name: all-binaries
           path: bin/*
